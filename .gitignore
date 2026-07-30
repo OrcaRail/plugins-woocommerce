@@ -1,0 +1,11 @@
+/vendor/
+.phpunit.result.cache
+.phpunit.cache/
+/dist/
+*.zip
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+.real-flow-logs/

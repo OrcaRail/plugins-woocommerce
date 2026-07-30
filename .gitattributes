@@ -1,0 +1,7 @@
+# Exclude from WordPress.org / export archives
+/.github export-ignore
+/tests export-ignore
+/bin export-ignore
+/phpunit.xml.dist export-ignore
+/phpstan.neon export-ignore
+/.gitignore export-ignore

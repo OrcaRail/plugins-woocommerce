@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OrcaRail">
+  <rect width="64" height="64" rx="12" fill="#0B1F33"/>
+  <path d="M14 34c8-14 28-18 36-8 2 3 3 7 2 11-6-4-14-5-22-2-6 2-11 6-14 11-2-4-3-8-2-12z" fill="#5EEAD4"/>
+  <circle cx="44" cy="24" r="4" fill="#F8FAFC"/>
+</svg>
