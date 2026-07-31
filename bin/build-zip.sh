@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 VERSION="$(grep -E '^\s*\*\s*Version:' orcarail-woocommerce.php | head -1 | sed -E 's/.*Version:\s*//')"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.0.1}"
 
 DIST="$ROOT/dist"
 STAGE="$DIST/orcarail-woocommerce"

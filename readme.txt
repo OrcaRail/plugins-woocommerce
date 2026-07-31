@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, orcarail, cryptocurrency
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -54,6 +54,9 @@ No. The return endpoint retrieves the Payment Intent from the OrcaRail API befor
 Not in 1.0. The merchant configures one token ID and one network ID in gateway settings.
 
 == Changelog ==
+
+= 1.0.1 =
+* Dependencies now install from public Packagist; no private registry credentials required.
 
 = 1.0.0 =
 * Initial release: hosted one-time checkout, webhooks, Blocks, HPOS.

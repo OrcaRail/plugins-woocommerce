@@ -3,7 +3,7 @@
  * Plugin Name: OrcaRail for WooCommerce
  * Plugin URI: https://github.com/OrcaRail/plugins-woocommerce
  * Description: Accept crypto payments on your WooCommerce store with OrcaRail hosted checkout.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: OrcaRail
  * Author URI: https://orcarail.com
  * License: MIT
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('ORCARAIL_WC_VERSION', '1.0.0');
+define('ORCARAIL_WC_VERSION', '1.0.1');
 define('ORCARAIL_WC_PLUGIN_FILE', __FILE__);
 define('ORCARAIL_WC_PLUGIN_PATH', untrailingslashit(plugin_dir_path(__FILE__)));
 define('ORCARAIL_WC_PLUGIN_URL', untrailingslashit(plugin_dir_url(__FILE__)));
