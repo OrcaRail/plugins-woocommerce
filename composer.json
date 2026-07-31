@@ -15,16 +15,6 @@
         "php-stubs/wordpress-stubs": "^6.7",
         "php-stubs/woocommerce-stubs": "^9.0"
     },
-    "repositories": [
-        {
-            "packagist.org": false
-        },
-        {
-            "name": "private-packagist",
-            "type": "composer",
-            "url": "https://repo.packagist.com/orcarail/"
-        }
-    ],
     "autoload": {
         "classmap": [
             "includes/"
