@@ -9,3 +9,6 @@ node_modules/
 .env.*
 !.env.example
 .real-flow-logs/
+
+# Graphify generated knowledge graph
+graphify-out/
