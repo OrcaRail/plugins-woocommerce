@@ -36,6 +36,7 @@ OrcaRail for WooCommerce redirects shoppers to OrcaRail hosted checkout to pay w
 3. Open **WooCommerce → Settings → Payments → OrcaRail**.
 4. Enter API key, API secret, webhook signing secret, token ID, and network ID.
 5. In the OrcaRail dashboard, set the API key webhook URL to the URL shown in the settings description (`/?wc-api=wc_gateway_orcarail&orcarail=webhook`).
+6. To test first, open **Go to sandbox** in the OrcaRail dashboard, create a sandbox API key (`ak_test_…`), fill the **Test** fields (key, secret, webhook secret, testnet token and network IDs) and enable **Test mode**. Checkout then runs on testnets with no real funds; an admin notice reminds you while it is on. Disable test mode to go live.
 
 == Installation ==
 
@@ -49,11 +50,18 @@ OrcaRail for WooCommerce redirects shoppers to OrcaRail hosted checkout to pay w
 
 No. The return endpoint retrieves the Payment Intent from the OrcaRail API before updating the order. Webhooks are the primary source of truth.
 
+= How do I test without real funds? =
+
+Enable **Test mode** with the keys of your OrcaRail sandbox organization (`ak_test_…`). Test payments use testnets and can be simulated on the payment page without a wallet. A live store ignores sandbox webhook events, and a store in test mode ignores live ones.
+
 = Can customers choose any token? =
 
 Not in 1.0. The merchant configures one token ID and one network ID in gateway settings.
 
 == Changelog ==
+
+= Unreleased =
+* Test mode: separate sandbox (ak_test_) credentials, testnet token and network, admin notice, key-prefix validation on save, and webhook livemode checks.
 
 = 1.0.1 =
 * Dependencies now install from public Packagist; no private registry credentials required.

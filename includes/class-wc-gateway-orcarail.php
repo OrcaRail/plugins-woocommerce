@@ -47,12 +47,43 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
             [$this, 'save_admin_options']
         );
         add_action('woocommerce_api_wc_gateway_orcarail', [$this, 'handle_api_request']);
+        add_action('admin_notices', [$this, 'test_mode_notice']);
         add_action('woocommerce_thankyou_' . $this->id, [$this, 'thankyou_page']);
     }
 
     public function save_admin_options(): void
     {
         $this->process_admin_options();
+
+        // Live fields need a live key; test-mode fields need a sandbox (ak_test_) key.
+        if (!WC_OrcaRail_API::api_key_matches_mode((string) $this->get_option('api_key', ''), false)) {
+            WC_Admin_Settings::add_error(__('The live API key is a sandbox key (ak_test_…). Use it in the test mode fields instead.', 'orcarail-woocommerce'));
+        }
+        if (!WC_OrcaRail_API::api_key_matches_mode((string) $this->get_option('test_api_key', ''), true)) {
+            WC_Admin_Settings::add_error(__('The test API key must be a sandbox key (ak_test_…) from your OrcaRail sandbox organization.', 'orcarail-woocommerce'));
+        }
+    }
+
+    public function is_test_mode(): bool
+    {
+        return 'yes' === $this->get_option('testmode', 'no');
+    }
+
+    /** Reads a credential/network setting for the current mode (test mode uses the test_* fields). */
+    private function mode_option(string $key, string $default = ''): string
+    {
+        return (string) $this->get_option(WC_OrcaRail_API::mode_setting_key($key, $this->is_test_mode()), $default);
+    }
+
+    public function test_mode_notice(): void
+    {
+        if (!$this->is_test_mode() || 'yes' !== $this->enabled || !current_user_can('manage_woocommerce')) {
+            return;
+        }
+        echo '<div class="notice notice-warning"><p>' . esc_html__(
+            'OrcaRail is in test mode: checkout uses your sandbox organization on testnets and no real funds move.',
+            'orcarail-woocommerce'
+        ) . '</p></div>';
     }
 
     public function init_form_fields(): void
@@ -78,6 +109,13 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
                 'type' => 'textarea',
                 'description' => __('Payment method description shown at checkout.', 'orcarail-woocommerce'),
                 'default' => __('You will be redirected to OrcaRail to complete your crypto payment.', 'orcarail-woocommerce'),
+            ],
+            'testmode' => [
+                'title' => __('Test mode', 'orcarail-woocommerce'),
+                'type' => 'checkbox',
+                'label' => __('Enable test mode (sandbox organization, testnets, no real funds)', 'orcarail-woocommerce'),
+                'description' => __('Uses the test fields below: API keys (ak_test_…), webhook secret, token and network of your OrcaRail sandbox organization.', 'orcarail-woocommerce'),
+                'default' => 'no',
             ],
             'api_key' => [
                 'title' => __('API key', 'orcarail-woocommerce'),
@@ -113,6 +151,36 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
                 'description' => __('Fixed OrcaRail network UUID used for every order.', 'orcarail-woocommerce'),
                 'default' => '',
             ],
+            'test_api_key' => [
+                'title' => __('Test API key', 'orcarail-woocommerce'),
+                'type' => 'text',
+                'description' => __('Sandbox organization API key (ak_test_…).', 'orcarail-woocommerce'),
+                'default' => '',
+            ],
+            'test_api_secret' => [
+                'title' => __('Test API secret', 'orcarail-woocommerce'),
+                'type' => 'password',
+                'description' => __('Sandbox organization secret key (sk_test_…).', 'orcarail-woocommerce'),
+                'default' => '',
+            ],
+            'test_webhook_secret' => [
+                'title' => __('Test webhook signing secret', 'orcarail-woocommerce'),
+                'type' => 'password',
+                'description' => __('Signing secret from your sandbox API key (same webhook URL).', 'orcarail-woocommerce'),
+                'default' => '',
+            ],
+            'test_token_id' => [
+                'title' => __('Test token ID', 'orcarail-woocommerce'),
+                'type' => 'text',
+                'description' => __('Testnet token UUID (e.g. USDC on Arbitrum Sepolia).', 'orcarail-woocommerce'),
+                'default' => '',
+            ],
+            'test_network_id' => [
+                'title' => __('Test network ID', 'orcarail-woocommerce'),
+                'type' => 'text',
+                'description' => __('Testnet network UUID.', 'orcarail-woocommerce'),
+                'default' => '',
+            ],
             'base_url' => [
                 'title' => __('API base URL (optional)', 'orcarail-woocommerce'),
                 'type' => 'text',
@@ -135,7 +203,7 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
         }
 
         foreach (['api_key', 'api_secret', 'token_id', 'network_id'] as $key) {
-            if (trim((string) $this->get_option($key, '')) === '') {
+            if (trim($this->mode_option($key)) === '') {
                 return false;
             }
         }
@@ -169,8 +237,8 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
 
         try {
             $client = WC_OrcaRail_API::client([
-                'api_key' => (string) $this->get_option('api_key'),
-                'api_secret' => (string) $this->get_option('api_secret'),
+                'api_key' => $this->mode_option('api_key'),
+                'api_secret' => $this->mode_option('api_secret'),
                 'base_url' => (string) $this->get_option('base_url', ''),
             ]);
 
@@ -179,8 +247,8 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
             $params = WC_OrcaRail_API::build_intent_params(
                 $order,
                 [
-                    'token_id' => trim((string) $this->get_option('token_id')),
-                    'network_id' => trim((string) $this->get_option('network_id')),
+                    'token_id' => trim($this->mode_option('token_id')),
+                    'network_id' => trim($this->mode_option('network_id')),
                 ],
                 $return_url,
                 $cancel_url
@@ -286,7 +354,7 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
 
     public function get_webhook_secret(): string
     {
-        return trim((string) $this->get_option('webhook_secret', ''));
+        return trim($this->mode_option('webhook_secret'));
     }
 
     public function is_logging_enabled(): bool
@@ -300,8 +368,8 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
     public function get_api_settings(): array
     {
         return [
-            'api_key' => (string) $this->get_option('api_key', ''),
-            'api_secret' => (string) $this->get_option('api_secret', ''),
+            'api_key' => $this->mode_option('api_key'),
+            'api_secret' => $this->mode_option('api_secret'),
             'base_url' => (string) $this->get_option('base_url', ''),
         ];
     }

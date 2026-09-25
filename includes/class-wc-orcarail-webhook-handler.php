@@ -53,6 +53,14 @@ final class WC_OrcaRail_Webhook_Handler
             exit;
         }
 
+        // A live store never acts on sandbox (livemode=false) events, and vice versa.
+        if (!WC_OrcaRail_API::event_matches_mode($event, $gateway->is_test_mode())) {
+            WC_OrcaRail_Logger::debug('Ignoring webhook from the other mode (livemode mismatch)', $gateway->is_logging_enabled());
+            status_header(200);
+            echo wp_json_encode(['received' => true, 'ignored' => true]);
+            exit;
+        }
+
         $type = WC_OrcaRail_API::object_string($event, 'type') ?? '';
         $status = WC_OrcaRail_Order_Handler::status_from_event_type($type);
         if ($status === null) {
