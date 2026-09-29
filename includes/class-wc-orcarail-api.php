@@ -22,6 +22,46 @@ final class WC_OrcaRail_API
     public const META_CLIENT_SECRET = '_orcarail_client_secret';
     public const META_STATUS = '_orcarail_status';
 
+    /** Settings that have a separate test-mode (sandbox organization) value. */
+    public const MODE_SETTINGS = ['api_key', 'api_secret', 'webhook_secret', 'token_id', 'network_id'];
+
+    /**
+     * Option name to read for a setting in the current mode: test mode uses the
+     * sandbox organization's `test_*` values, live mode the plain ones.
+     */
+    public static function mode_setting_key(string $key, bool $testmode): string
+    {
+        return $testmode && in_array($key, self::MODE_SETTINGS, true) ? 'test_' . $key : $key;
+    }
+
+    /**
+     * Sandbox organizations issue `ak_test_` keys, live organizations `ak_live_`.
+     * An empty key is not a mismatch (it is reported as missing elsewhere).
+     */
+    public static function api_key_matches_mode(string $api_key, bool $testmode): bool
+    {
+        $api_key = trim($api_key);
+        if ($api_key === '') {
+            return true;
+        }
+
+        return $testmode ? str_starts_with($api_key, 'ak_test_') : !str_starts_with($api_key, 'ak_test_');
+    }
+
+    /**
+     * Whether a verified webhook event belongs to the gateway's mode. Events without
+     * `livemode` (older API versions) are accepted.
+     */
+    public static function event_matches_mode(mixed $event, bool $testmode): bool
+    {
+        $livemode = is_object($event) ? ($event->livemode ?? null) : (is_array($event) ? ($event['livemode'] ?? null) : null);
+        if (!is_bool($livemode)) {
+            return true;
+        }
+
+        return $livemode === !$testmode;
+    }
+
     /**
      * @param array{api_key?: string, api_secret?: string, base_url?: string} $settings
      */

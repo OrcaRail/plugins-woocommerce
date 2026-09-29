@@ -128,4 +128,29 @@ final class GatewayLogicTest extends TestCase
         }
         return true;
     }
+
+    public function testTestModeReadsSandboxSettings(): void
+    {
+        self::assertSame('test_api_key', \WC_OrcaRail_API::mode_setting_key('api_key', true));
+        self::assertSame('test_network_id', \WC_OrcaRail_API::mode_setting_key('network_id', true));
+        self::assertSame('api_key', \WC_OrcaRail_API::mode_setting_key('api_key', false));
+        self::assertSame('base_url', \WC_OrcaRail_API::mode_setting_key('base_url', true));
+    }
+
+    public function testApiKeyMustMatchMode(): void
+    {
+        self::assertTrue(\WC_OrcaRail_API::api_key_matches_mode('ak_test_abc', true));
+        self::assertFalse(\WC_OrcaRail_API::api_key_matches_mode('ak_live_abc', true));
+        self::assertTrue(\WC_OrcaRail_API::api_key_matches_mode('ak_live_abc', false));
+        self::assertFalse(\WC_OrcaRail_API::api_key_matches_mode('ak_test_abc', false));
+        self::assertTrue(\WC_OrcaRail_API::api_key_matches_mode('', true));
+    }
+
+    public function testWebhookEventMustMatchMode(): void
+    {
+        self::assertFalse(\WC_OrcaRail_API::event_matches_mode((object) ['livemode' => false], false));
+        self::assertTrue(\WC_OrcaRail_API::event_matches_mode((object) ['livemode' => false], true));
+        self::assertTrue(\WC_OrcaRail_API::event_matches_mode((object) ['livemode' => true], false));
+        self::assertTrue(\WC_OrcaRail_API::event_matches_mode((object) ['type' => 'x'], false));
+    }
 }
