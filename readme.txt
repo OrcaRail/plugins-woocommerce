@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, orcarail, cryptocurrency
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.0.1
+Stable tag: 1.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -60,7 +60,7 @@ Not in 1.0. The merchant configures one token ID and one network ID in gateway s
 
 == Changelog ==
 
-= Unreleased =
+= 1.1.0 =
 * Test mode: separate sandbox (ak_test_) credentials, testnet token and network, admin notice, key-prefix validation on save, and webhook livemode checks.
 
 = 1.0.1 =
