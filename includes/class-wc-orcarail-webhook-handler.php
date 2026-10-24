@@ -44,6 +44,19 @@ final class WC_OrcaRail_Webhook_Handler
             exit;
         }
 
+        $timestamp = isset($_SERVER['HTTP_X_WEBHOOK_TIMESTAMP'])
+            ? sanitize_text_field(wp_unslash((string) $_SERVER['HTTP_X_WEBHOOK_TIMESTAMP']))
+            : '';
+        $signature_v2 = isset($_SERVER['HTTP_X_WEBHOOK_SIGNATURE_V2'])
+            ? sanitize_text_field(wp_unslash((string) $_SERVER['HTTP_X_WEBHOOK_SIGNATURE_V2']))
+            : '';
+        if (!WC_OrcaRail_API::webhook_timestamp_valid($payload, $timestamp, $signature_v2, $secret)) {
+            WC_OrcaRail_Logger::error('Webhook timestamped signature missing, invalid or expired');
+            status_header(400);
+            echo wp_json_encode(['error' => 'invalid_signature']);
+            exit;
+        }
+
         try {
             $event = Webhook::constructEvent($payload, $signature, $secret);
         } catch (SignatureVerificationException $e) {

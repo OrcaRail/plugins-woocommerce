@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.2'
           extensions: curl, json, dom, xml, mbstring, zip
@@ -31,7 +31,7 @@ jobs:
         run: bash bin/build-zip.sh
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*.zip
           generate_release_notes: true
