@@ -99,6 +99,21 @@ final class GatewayLogicTest extends TestCase
         Webhook::constructEvent($payload . ' ', $signature, 'whsec');
     }
 
+    public function testTimestampedSignatureBlocksReplays(): void
+    {
+        $payload = '{"type":"payment_intent.completed"}';
+        $now = 1700000000;
+        $sign = static fn (int $t): string => hash_hmac('sha256', $t . '.' . $payload, 'whsec');
+
+        self::assertTrue(\WC_OrcaRail_API::webhook_timestamp_valid($payload, (string) $now, $sign($now), 'whsec', $now));
+        // Captured delivery replayed 10 minutes later.
+        self::assertFalse(\WC_OrcaRail_API::webhook_timestamp_valid($payload, (string) ($now - 600), $sign($now - 600), 'whsec', $now));
+        // Timestamp swapped without re-signing.
+        self::assertFalse(\WC_OrcaRail_API::webhook_timestamp_valid($payload, (string) $now, $sign($now - 600), 'whsec', $now));
+        // Missing v2 headers.
+        self::assertFalse(\WC_OrcaRail_API::webhook_timestamp_valid($payload, '', '', 'whsec', $now));
+    }
+
     public function testMetadataMismatchDetection(): void
     {
         $order = new \WC_Order(42, '1.00', 'USD', 'wc_order_testkey');

@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, orcarail, cryptocurrency
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -59,6 +59,10 @@ Enable **Test mode** with the keys of your OrcaRail sandbox organization (`ak_te
 Not in 1.0. The merchant configures one token ID and one network ID in gateway settings.
 
 == Changelog ==
+
+= 1.2.0 =
+* Security: webhooks must carry the timestamped x-webhook-signature-v2 header; deliveries older than 5 minutes are rejected (replay protection).
+* CI: third-party GitHub Actions pinned by commit SHA.
 
 = 1.1.0 =
 * Test mode: separate sandbox (ak_test_) credentials, testnet token and network, admin notice, key-prefix validation on save, and webhook livemode checks.

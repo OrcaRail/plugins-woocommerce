@@ -48,6 +48,30 @@ final class WC_OrcaRail_API
         return $testmode ? str_starts_with($api_key, 'ak_test_') : !str_starts_with($api_key, 'ak_test_');
     }
 
+    /** Maximum age of a webhook delivery, in seconds. */
+    public const WEBHOOK_TOLERANCE_SECONDS = 300;
+
+    /**
+     * Timestamped (v2) signature check: HMAC of "<timestamp>.<payload>" within the
+     * tolerance. Stops a captured webhook from being replayed later.
+     */
+    public static function webhook_timestamp_valid(
+        string $payload,
+        string $timestamp,
+        string $signature_v2,
+        string $secret,
+        ?int $now = null
+    ): bool {
+        if ($secret === '' || preg_match('/^\d+$/', $timestamp) !== 1 || preg_match('/^[a-f0-9]{64}$/i', $signature_v2) !== 1) {
+            return false;
+        }
+        if (abs(($now ?? time()) - (int) $timestamp) > self::WEBHOOK_TOLERANCE_SECONDS) {
+            return false;
+        }
+
+        return hash_equals(hash_hmac('sha256', $timestamp . '.' . $payload, $secret), strtolower($signature_v2));
+    }
+
     /**
      * Whether a verified webhook event belongs to the gateway's mode. Events without
      * `livemode` (older API versions) are accepted.
