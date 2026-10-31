@@ -75,6 +75,79 @@ final class GatewayLogicTest extends TestCase
         self::assertTrue($failed->has_status('failed'));
     }
 
+    public function testSettleCompletesAProcessingIntent(): void
+    {
+        $order = new \WC_Order();
+        $completed = [];
+
+        self::assertTrue(\WC_OrcaRail_Order_Handler::settle(
+            $order,
+            'pi_5',
+            static fn (string $id): array => ['id' => $id, 'status' => 'processing'],
+            static function (string $id) use (&$completed): array {
+                $completed[] = $id;
+                return ['id' => $id, 'status' => 'completed'];
+            },
+        ));
+
+        self::assertSame(['pi_5'], $completed);
+        self::assertTrue($order->payment_complete_called);
+    }
+
+    public function testSettleKeepsAnUnconfirmedPaymentOnHold(): void
+    {
+        $order = new \WC_Order();
+
+        \WC_OrcaRail_Order_Handler::settle(
+            $order,
+            'pi_6',
+            static fn (string $id): array => ['status' => 'processing'],
+            static fn (string $id): array => ['status' => 'processing'],
+        );
+
+        self::assertTrue($order->has_status('on-hold'));
+        self::assertFalse($order->payment_complete_called);
+    }
+
+    public function testSettleNeverCompletesAnUnpaidIntent(): void
+    {
+        $order = new \WC_Order();
+        $completeCalled = false;
+
+        \WC_OrcaRail_Order_Handler::settle(
+            $order,
+            'pi_7',
+            static fn (string $id): array => ['status' => 'requires_payment_method'],
+            static function (string $id) use (&$completeCalled): array {
+                $completeCalled = true;
+                return [];
+            },
+        );
+
+        self::assertFalse($completeCalled);
+        self::assertTrue($order->has_status('failed'));
+    }
+
+    public function testSettleOnlyPaidLeavesOrdersWithoutACompletedIntentAlone(): void
+    {
+        foreach (['requires_payment_method', 'processing'] as $status) {
+            $order = new \WC_Order();
+
+            $changed = \WC_OrcaRail_Order_Handler::settle(
+                $order,
+                'pi_8',
+                static fn (string $id): array => ['status' => $status],
+                static fn (string $id): array => ['status' => $status],
+                false,
+                true,
+            );
+
+            self::assertFalse($changed, $status);
+            self::assertFalse($order->has_status(['failed', 'on-hold']), $status);
+            self::assertSame('', $order->get_meta(\WC_OrcaRail_API::META_STATUS), $status);
+        }
+    }
+
     public function testDuplicateCheckoutReuseCondition(): void
     {
         $order = new \WC_Order();

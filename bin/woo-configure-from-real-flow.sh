@@ -27,7 +27,10 @@ API_HOST="${ORCARAIL_API_HOST:-http://127.0.0.1:3000}"
 WEBHOOK_URL="${ORCARAIL_WEBHOOK_URL:-${WORDPRESS_URL}/?wc-api=wc_gateway_orcarail&orcarail=webhook}"
 BASE_URL="${ORCARAIL_API_BASE_URL:-http://host.docker.internal:3000/api/v1}"
 
-DEMO_ENV="${ORCARAIL_DEMO_ENV_LOCAL:-$ORCARAIL_ROOT/demo/.env.local}"
+# Real-flow pays on testnets, so the store runs in Test mode with the sandbox key
+# (ak_test_) the seed writes for the demo-sandbox organization.
+DEMO_ENV="${ORCARAIL_DEMO_ENV_LOCAL:-$ORCARAIL_ROOT/demo/.env.sandbox.local}"
+ORGANIZATION_SLUG="${ORCARAIL_ORGANIZATION_SLUG:-demo-sandbox}"
 if [[ ! -f "$DEMO_ENV" ]]; then
   echo "Missing $DEMO_ENV — start real-flow backend so relational seed writes credentials." >&2
   exit 1
@@ -47,7 +50,7 @@ echo "Configuring demo API key webhook → $WEBHOOK_URL"
 CONFIG_JSON="$(
   curl -fsS -X POST "$API_HOST/api/__real-flow/configure-woo" \
     -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg u "$WEBHOOK_URL" '{webhookUrl:$u}')"
+    -d "$(jq -n --arg u "$WEBHOOK_URL" --arg o "$ORGANIZATION_SLUG" '{webhookUrl:$u, organizationSlug:$o}')"
 )"
 
 TOKEN_ID="$(echo "$CONFIG_JSON" | jq -r '.tokenId')"
@@ -73,11 +76,12 @@ SETTINGS_JSON="$(
       enabled: "yes",
       title: "Pay with crypto (OrcaRail)",
       description: "You will be redirected to OrcaRail to complete your crypto payment.",
-      api_key: $key,
-      api_secret: $secret,
-      webhook_secret: $whsec,
-      token_id: $token,
-      network_id: $network,
+      testmode: "yes",
+      test_api_key: $key,
+      test_api_secret: $secret,
+      test_webhook_secret: $whsec,
+      test_token_id: $token,
+      test_network_id: $network,
       base_url: $base,
       logging: "yes"
     }'

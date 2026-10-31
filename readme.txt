@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, orcarail, cryptocurrency
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -50,6 +50,10 @@ OrcaRail for WooCommerce redirects shoppers to OrcaRail hosted checkout to pay w
 
 No. The return endpoint retrieves the Payment Intent from the OrcaRail API before updating the order. Webhooks are the primary source of truth.
 
+= When does an order become paid? =
+
+OrcaRail keeps a paid Payment Intent `processing` until the store calls `complete`; until then the payment is not final and is never withdrawn. The plugin calls `complete` when the shopper returns to the store, and an hourly WP-Cron job does the same for pending and on-hold orders of the last 7 days whose shopper never came back; only orders whose payment completes change, all others are left alone. The order becomes paid as soon as the payment is confirmed on-chain.
+
 = How do I test without real funds? =
 
 Enable **Test mode** with the keys of your OrcaRail sandbox organization (`ak_test_…`). Test payments use testnets and can be simulated on the payment page without a wallet. A live store ignores sandbox webhook events, and a store in test mode ignores live ones.
@@ -59,6 +63,9 @@ Enable **Test mode** with the keys of your OrcaRail sandbox organization (`ak_te
 Not in 1.0. The merchant configures one token ID and one network ID in gateway settings.
 
 == Changelog ==
+
+= 1.2.1 =
+* Fix: complete the OrcaRail Payment Intent on return and from an hourly sweep of pending and on-hold orders. Without it, paid orders stayed on-hold and their payments were never final or withdrawable.
 
 = 1.2.0 =
 * Security: webhooks must carry the timestamped x-webhook-signature-v2 header; deliveries older than 5 minutes are rejected (replay protection).

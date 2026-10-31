@@ -138,7 +138,7 @@ else
 fi
 
 # Wait for seed credentials (written after backend bootstrap).
-DEMO_ENV="$ORCARAIL_ROOT/demo/.env.local"
+DEMO_ENV="$ORCARAIL_ROOT/demo/.env.sandbox.local"
 for i in $(seq 1 60); do
   if [[ -f "$DEMO_ENV" ]] && grep -q '^ORCARAIL_API_KEY=' "$DEMO_ENV" 2>/dev/null; then
     break
@@ -169,8 +169,6 @@ INTENT_ID="$(echo "$CREATE_JSON" | jq -r '.intent_id')"
 PAY_URL_RESULT="$(echo "$CREATE_JSON" | jq -r '.pay_url')"
 PAY_SLUG="$(echo "$CREATE_JSON" | jq -r '.pay_slug')"
 RETURN_URL="$(echo "$CREATE_JSON" | jq -r '.return_url')"
-ORDER_KEY="$(echo "$CREATE_JSON" | jq -r '.order_key')"
-ORDER_NUMBER="$(echo "$CREATE_JSON" | jq -r '.order_number')"
 
 case "$PAY_URL_RESULT" in
   http://127.0.0.1:5174*|http://localhost:5174*) ;;
@@ -180,115 +178,66 @@ case "$PAY_URL_RESULT" in
     ;;
 esac
 
-echo "Simulating payment complete for slug=$PAY_SLUG ..."
-SIM_JSON="$(
+# The payment is confirmed on-chain (scanner-style). OrcaRail keeps the payment
+# intent processing until the store calls complete, so the order must stay unpaid
+# until the plugin does that (on return, or from the hourly sweep).
+confirm_payment() {
+  local slug="$1"
+  echo "Confirming the payment on-chain for slug=$slug ..."
   curl -fsS -X POST "$API_HOST/api/__real-flow/simulate" \
     -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg s "$PAY_SLUG" '{action:"complete-first-payment",FLOW_PAYMENT_LINK_SLUG:$s}')"
-)"
-echo "$SIM_JSON" | jq .
+    -d "$(jq -n --arg s "$slug" '{action:"confirm-first-payment",FLOW_PAYMENT_LINK_SLUG:$s}')" | jq .
+}
 
-echo "Polling __real-flow/state for webhook delivery to Woo..."
-DELIVERED=0
-for i in $(seq 1 30); do
-  STATE_JSON="$(
-    curl -fsS -X POST "$API_HOST/api/__real-flow/state" \
-      -H 'Content-Type: application/json' \
-      -d '{"organizationSlug":"demo","limit":20}'
+assert_paid() {
+  local out
+  out="$(
+    "${COMPOSE[@]}" run --rm --no-deps \
+      -e "ORCARAIL_E2E_ORDER_ID=$1" \
+      -e "ORCARAIL_E2E_INTENT_ID=$2" \
+      wpcli wp eval-file /var/www/html/wp-content/plugins/orcarail-woocommerce/e2e/assert-paid.php
   )"
-  if echo "$STATE_JSON" | jq -e --arg u "$WEBHOOK_URL" \
-    '.webhooks // [] | map(select((.url // "") | contains("wc_gateway_orcarail"))) | length > 0' \
-    >/dev/null 2>&1; then
-    DELIVERED=1
-    echo "webhook_log contains Woo WC-API URL (attempt $i)"
-    break
+  echo "$out" | jq .
+}
+
+assert_unpaid() {
+  local paid
+  paid="$(
+    "${COMPOSE[@]}" run --rm --no-deps -e "ORCARAIL_E2E_ORDER_ID=$1" \
+      wpcli wp eval 'echo wc_get_order((int) getenv("ORCARAIL_E2E_ORDER_ID"))->is_paid() ? "paid" : "unpaid";'
+  )"
+  if [[ "$paid" != *unpaid* ]]; then
+    echo "Order $1 is paid before the store completed its payment intent" >&2
+    exit 1
   fi
-  # Also match by host port path fragment.
-  if echo "$STATE_JSON" | jq -e \
-    '.webhooks // [] | map(select((.url // "") | test("8088|wc_gateway_orcarail"))) | length > 0' \
-    >/dev/null 2>&1; then
-    DELIVERED=1
-    echo "webhook_log matched local Woo URL (attempt $i)"
-    break
-  fi
-  sleep 1
-done
+  echo "Order $1 is still unpaid (payment intent waits for complete)"
+}
 
-if [[ "$DELIVERED" != "1" ]]; then
-  echo "No webhook_log entry for Woo yet — posting signed payment_intent.completed fallback"
-fi
+confirm_payment "$PAY_SLUG"
+assert_unpaid "$ORDER_ID"
 
-# Always ensure order reconcile via signed webhook (covers flaky/unsigned queue delivery).
-PAYLOAD="$(
-  jq -n \
-    --arg id "$INTENT_ID" \
-    --arg oid "$ORDER_ID" \
-    --arg okey "$ORDER_KEY" \
-    --arg onum "$ORDER_NUMBER" \
-    '{
-      type: "payment_intent.completed",
-      data: {
-        object: {
-          id: $id,
-          status: "completed",
-          metadata: {
-            woocommerce_order_id: $oid,
-            woocommerce_order_key: $okey,
-            woocommerce_order_number: $onum
-          }
-        }
-      },
-      created: (now | floor)
-    }'
-)"
-SECRET="${ORCARAIL_API_SECRET:?missing ORCARAIL_API_SECRET}"
-SIGNATURE="$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $NF}')"
-
-WH_CODE="$(
-  curl -sS -o "$LOG_DIR/webhook-response.json" -w '%{http_code}' \
-    -X POST "$WEBHOOK_URL" \
-    -H 'Content-Type: application/json' \
-    -H "X-Webhook-Signature: $SIGNATURE" \
-    -H 'X-Webhook-Event: payment_intent.completed' \
-    --data-binary "$PAYLOAD"
-)"
-echo "Signed webhook HTTP $WH_CODE: $(cat "$LOG_DIR/webhook-response.json")"
-if [[ "$WH_CODE" != "200" ]]; then
-  echo "Signed webhook to Woo failed" >&2
-  exit 1
-fi
-
-export ORCARAIL_E2E_ORDER_ID="$ORDER_ID"
-export ORCARAIL_E2E_INTENT_ID="$INTENT_ID"
-# wpcli service does not inherit host env — pass via --env
-ASSERT1="$(
-  "${COMPOSE[@]}" run --rm --no-deps \
-    -e "ORCARAIL_E2E_ORDER_ID=$ORDER_ID" \
-    -e "ORCARAIL_E2E_INTENT_ID=$INTENT_ID" \
-    wpcli wp eval-file /var/www/html/wp-content/plugins/orcarail-woocommerce/e2e/assert-paid.php
-)"
-echo "$ASSERT1" | jq .
-
-echo "Hitting return URL (idempotent reconcile)..."
+echo "Hitting return URL (the plugin completes the payment intent)..."
 curl -fsS -o /dev/null -L --max-redirs 5 "$RETURN_URL" || true
+assert_paid "$ORDER_ID" "$INTENT_ID"
 
-ASSERT2="$(
-  "${COMPOSE[@]}" run --rm --no-deps \
-    -e "ORCARAIL_E2E_ORDER_ID=$ORDER_ID" \
-    -e "ORCARAIL_E2E_INTENT_ID=$INTENT_ID" \
-    wpcli wp eval-file /var/www/html/wp-content/plugins/orcarail-woocommerce/e2e/assert-paid.php
-)"
-echo "$ASSERT2" | jq .
+echo "Hitting return URL again (idempotent reconcile)..."
+curl -fsS -o /dev/null -L --max-redirs 5 "$RETURN_URL" || true
+assert_paid "$ORDER_ID" "$INTENT_ID"
+
+echo "Second order: the shopper never returns, the hourly sweep completes it..."
+CREATE2_JSON="$(wp eval-file /var/www/html/wp-content/plugins/orcarail-woocommerce/e2e/create-payment.php)"
+ORDER2_ID="$(echo "$CREATE2_JSON" | jq -r '.order_id')"
+INTENT2_ID="$(echo "$CREATE2_JSON" | jq -r '.intent_id')"
+PAY2_SLUG="$(echo "$CREATE2_JSON" | jq -r '.pay_slug')"
+confirm_payment "$PAY2_SLUG"
+assert_unpaid "$ORDER2_ID"
+wp eval 'WC_OrcaRail::run_completion_sweep();'
+assert_paid "$ORDER2_ID" "$INTENT2_ID"
 
 echo ""
 echo "Woo real-flow smoke passed."
-echo "  order=$ORDER_ID intent=$INTENT_ID"
-echo "  webhook_url=$WEBHOOK_URL"
-if [[ "$DELIVERED" == "1" ]]; then
-  echo "  async webhook_log: observed"
-else
-  echo "  async webhook_log: not observed (signed fallback used)"
-fi
+echo "  return URL completed order=$ORDER_ID intent=$INTENT_ID"
+echo "  hourly sweep completed order=$ORDER2_ID intent=$INTENT2_ID"
 if [[ "$KEEP_WOO" == "1" ]]; then
   echo "  KEEP_WOO=1 — leaving WordPress stack up at $WORDPRESS_URL"
 fi

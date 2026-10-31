@@ -409,10 +409,7 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
         }
 
         try {
-            $client = WC_OrcaRail_API::client($this->get_api_settings());
-            $intent = $client->paymentIntents->retrieve($intent_id);
-            $status = WC_OrcaRail_API::object_string($intent, 'status') ?? '';
-            WC_OrcaRail_Order_Handler::reconcile($order, $intent_id, $status, $this->logging);
+            $this->settle_order($order, $intent_id);
         } catch (Throwable $e) {
             WC_OrcaRail_Logger::error('Return reconcile failed: ' . $e->getMessage());
         }
@@ -428,8 +425,54 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
             exit;
         }
 
-        // Still pending/processing — thank-you page is fine; webhook will finish.
+        // Still pending/processing — thank-you page is fine; the hourly sweep
+        // (complete_pending_orders) completes it once the payment is confirmed.
         wp_safe_redirect($this->get_return_url($order instanceof WC_Order ? $order : null));
         exit;
+    }
+
+    /**
+     * Completes OrcaRail payments whose customer never came back to the return URL.
+     * Runs hourly from WP-Cron over pending and on-hold orders of the last 7 days;
+     * only orders whose intent ends completed change, all others are left untouched.
+     */
+    public function complete_pending_orders(): void
+    {
+        $orders = wc_get_orders([
+            'payment_method' => $this->id,
+            'status' => ['pending', 'on-hold'],
+            'date_created' => '>' . (time() - 7 * DAY_IN_SECONDS),
+            'limit' => 50,
+        ]);
+        if (!is_array($orders)) {
+            return;
+        }
+
+        foreach ($orders as $order) {
+            $intent_id = (string) $order->get_meta(WC_OrcaRail_API::META_INTENT_ID, true);
+            if ($intent_id === '') {
+                continue;
+            }
+            try {
+                $this->settle_order($order, $intent_id, true);
+            } catch (Throwable $e) {
+                WC_OrcaRail_Logger::error(
+                    sprintf('Completion sweep failed for order %d: %s', $order->get_id(), $e->getMessage())
+                );
+            }
+        }
+    }
+
+    private function settle_order(WC_Order $order, string $intent_id, bool $only_paid = false): void
+    {
+        $intents = WC_OrcaRail_API::client($this->get_api_settings())->paymentIntents;
+        WC_OrcaRail_Order_Handler::settle(
+            $order,
+            $intent_id,
+            static fn (string $id) => $intents->retrieve($id),
+            static fn (string $id) => $intents->complete($id),
+            $this->logging,
+            $only_paid
+        );
     }
 }

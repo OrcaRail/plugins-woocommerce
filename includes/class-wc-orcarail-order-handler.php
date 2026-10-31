@@ -130,6 +130,38 @@ final class WC_OrcaRail_Order_Handler
     }
 
     /**
+     * Read the intent, finish it when it is processing, and apply the result.
+     *
+     * OrcaRail keeps a paid intent `processing` until the merchant calls
+     * `complete` (until then the payment is not final and never withdrawn).
+     * `complete` completes the intent once the payment is confirmed on-chain and
+     * leaves it `processing` otherwise, so calling it again later is safe.
+     *
+     * @param callable(string): (\OrcaRail\OrcaRailObject|array<string, mixed>) $retrieve Loads the intent.
+     * @param callable(string): (\OrcaRail\OrcaRailObject|array<string, mixed>) $complete Completes it.
+     * @param bool $only_paid Leave the order alone unless the intent ends completed (the background
+     *                        sweep only finishes paid orders; it never fails or holds others).
+     */
+    public static function settle(
+        WC_Order $order,
+        string $intent_id,
+        callable $retrieve,
+        callable $complete,
+        bool $logging = false,
+        bool $only_paid = false
+    ): bool {
+        $status = WC_OrcaRail_API::object_string($retrieve($intent_id), 'status') ?? '';
+        if ($status === 'processing') {
+            $status = WC_OrcaRail_API::object_string($complete($intent_id), 'status') ?? $status;
+        }
+        if ($only_paid && $status !== 'completed') {
+            return false;
+        }
+
+        return self::reconcile($order, $intent_id, $status, $logging);
+    }
+
+    /**
      * Map a webhook event type to an intent status string.
      */
     public static function status_from_event_type(string $event_type): ?string

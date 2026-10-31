@@ -13,6 +13,7 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 }
 
 delete_option('woocommerce_orcarail_settings');
+wp_clear_scheduled_hook('orcarail_wc_complete_pending_orders');
 
 if (function_exists('wp_cache_flush')) {
     wp_cache_flush();

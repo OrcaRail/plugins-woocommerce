@@ -33,6 +33,22 @@ final class WC_OrcaRail
         add_filter('plugin_action_links_' . plugin_basename(ORCARAIL_WC_PLUGIN_FILE), [$this, 'plugin_links']);
 
         WC_OrcaRail_Webhook_Handler::init();
+
+        add_action(self::COMPLETION_SWEEP_HOOK, [self::class, 'run_completion_sweep']);
+        if (!wp_next_scheduled(self::COMPLETION_SWEEP_HOOK)) {
+            wp_schedule_event(time() + HOUR_IN_SECONDS, 'hourly', self::COMPLETION_SWEEP_HOOK);
+        }
+    }
+
+    /** WP-Cron hook that completes paid orders whose customer never returned. */
+    public const COMPLETION_SWEEP_HOOK = 'orcarail_wc_complete_pending_orders';
+
+    public static function run_completion_sweep(): void
+    {
+        $gateway = WC()->payment_gateways()->payment_gateways()['orcarail'] ?? null;
+        if ($gateway instanceof WC_Gateway_OrcaRail && $gateway->enabled === 'yes') {
+            $gateway->complete_pending_orders();
+        }
     }
 
     /**

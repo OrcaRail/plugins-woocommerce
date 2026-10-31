@@ -28,11 +28,13 @@ Use a [GitHub release ZIP](https://github.com/OrcaRail/plugins-woocommerce/relea
 Checkout → create+confirm Payment Intent (PHP SDK)
         → redirect to OrcaRail pay_url
         → shopper pays crypto
+        → return (or hourly sweep) calls paymentIntents->complete()
         → webhook / return reconcile Woo order
 ```
 
 - **Webhook**: verifies `X-Webhook-Signature` with `OrcaRail\Webhook` on the raw body.
 - **Return URL**: server-side `paymentIntents->retrieve()` before changing order status. Browser redirect alone is never trusted as payment proof.
+- **Complete (required)**: OrcaRail keeps a paid intent `processing` until `complete` is called; until then the payment is not final and never withdrawn. The return handler calls `paymentIntents->complete()` for a processing intent, and an hourly WP-Cron sweep (`orcarail_wc_complete_pending_orders`) does the same for pending and on-hold orders of the last 7 days whose shopper never came back (only orders whose intent ends completed change; all others are left alone).
 - **Retries**: if an order already has an intent + pay URL and is unpaid, checkout reuses them instead of creating duplicates.
 
 ## Supported / not supported (1.0)
@@ -85,7 +87,7 @@ What the script does:
 2. Seeds API key with webhook `http://127.0.0.1:8088/?wc-api=wc_gateway_orcarail&orcarail=webhook` (override via `ORCARAIL_SEED_WEBHOOK_URL`) and ensures `API_KEY_WEBHOOK_SECRET_ENCRYPTION_KEY` for HMAC signing
 3. `docker compose -p orcarail-woo` WordPress + MariaDB + plugin bind-mount
 4. Configures gateway from `demo/.env.local` + `POST /api/__real-flow/configure-woo`
-5. WP-CLI: `process_payment` → `__real-flow/simulate` → assert local webhook / signed fallback → return URL idempotency
+5. WP-CLI: `process_payment` → `__real-flow/simulate` (`confirm-first-payment`, scanner-style) → order still unpaid → return URL completes the payment intent (idempotent on a second hit) → a second order whose shopper never returns is completed by the hourly sweep
 
 Useful env:
 
