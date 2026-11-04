@@ -150,7 +150,8 @@ final class WC_OrcaRail_Order_Handler
         bool $logging = false,
         bool $only_paid = false
     ): bool {
-        $status = WC_OrcaRail_API::object_string($retrieve($intent_id), 'status') ?? '';
+        $intent = $retrieve($intent_id);
+        $status = WC_OrcaRail_API::object_string($intent, 'status') ?? '';
         if ($status === 'processing') {
             $status = WC_OrcaRail_API::object_string($complete($intent_id), 'status') ?? $status;
         }
@@ -158,7 +159,47 @@ final class WC_OrcaRail_Order_Handler
             return false;
         }
 
+        // A paid intent for another amount or currency must not complete this order: the order total
+        // can change after the intent was created (WooCommerce reuses pending orders).
+        if (in_array($status, ['completed', 'processing'], true) && !self::intent_matches_order($intent, $order)) {
+            WC_OrcaRail_Logger::error(
+                sprintf('Intent %s does not match the total or currency of order %d', $intent_id, $order->get_id())
+            );
+            if (!$order->is_paid() && !$order->has_status('on-hold')) {
+                $order->update_status(
+                    'on-hold',
+                    sprintf(
+                        /* translators: %s: OrcaRail payment intent id */
+                        __('OrcaRail payment %s does not match the order total or currency. Check it before shipping.', 'orcarail-woocommerce'),
+                        $intent_id
+                    )
+                );
+                $order->save();
+            }
+            return false;
+        }
+
         return self::reconcile($order, $intent_id, $status, $logging);
+    }
+
+    /**
+     * Whether a payment intent was created for this order's total and currency. Intents keep the
+     * requested amount in `original_amount` / `original_currency` when the API converted it.
+     *
+     * @param \OrcaRail\OrcaRailObject|array<string, mixed> $intent
+     */
+    public static function intent_matches_order(\OrcaRail\OrcaRailObject|array $intent, WC_Order $order): bool
+    {
+        $amount = WC_OrcaRail_API::object_string($intent, 'original_amount')
+            ?? WC_OrcaRail_API::object_string($intent, 'amount');
+        $currency = WC_OrcaRail_API::object_string($intent, 'original_currency')
+            ?? WC_OrcaRail_API::object_string($intent, 'currency');
+        if ($amount === null || $currency === null || !is_numeric($amount)) {
+            return false;
+        }
+
+        return number_format((float) $amount, 2, '.', '') === WC_OrcaRail_API::format_amount($order)
+            && strtolower($currency) === strtolower($order->get_currency());
     }
 
     /**

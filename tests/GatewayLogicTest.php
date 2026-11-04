@@ -83,10 +83,10 @@ final class GatewayLogicTest extends TestCase
         self::assertTrue(\WC_OrcaRail_Order_Handler::settle(
             $order,
             'pi_5',
-            static fn (string $id): array => ['id' => $id, 'status' => 'processing'],
+            static fn (string $id): array => ['id' => $id, 'status' => 'processing', 'amount' => '19.99', 'currency' => 'usd'],
             static function (string $id) use (&$completed): array {
                 $completed[] = $id;
-                return ['id' => $id, 'status' => 'completed'];
+                return ['id' => $id, 'status' => 'completed', 'amount' => '19.99', 'currency' => 'usd'];
             },
         ));
 
@@ -101,8 +101,8 @@ final class GatewayLogicTest extends TestCase
         \WC_OrcaRail_Order_Handler::settle(
             $order,
             'pi_6',
-            static fn (string $id): array => ['status' => 'processing'],
-            static fn (string $id): array => ['status' => 'processing'],
+            static fn (string $id): array => ['status' => 'processing', 'amount' => '19.99', 'currency' => 'usd'],
+            static fn (string $id): array => ['status' => 'processing', 'amount' => '19.99', 'currency' => 'usd'],
         );
 
         self::assertTrue($order->has_status('on-hold'));

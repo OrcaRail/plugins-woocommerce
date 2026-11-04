@@ -21,6 +21,8 @@ final class WC_OrcaRail_API
     public const META_PAY_URL = '_orcarail_pay_url';
     public const META_CLIENT_SECRET = '_orcarail_client_secret';
     public const META_STATUS = '_orcarail_status';
+    /** Order total and currency the stored intent was created for (e.g. "10.50 eur"). */
+    public const META_INTENT_TOTAL = '_orcarail_intent_total';
 
     /** Settings that have a separate test-mode (sandbox organization) value. */
     public const MODE_SETTINGS = ['api_key', 'api_secret', 'webhook_secret', 'token_id', 'network_id'];
@@ -109,6 +111,12 @@ final class WC_OrcaRail_API
     public static function format_amount(WC_Order $order): string
     {
         return number_format((float) $order->get_total(), 2, '.', '');
+    }
+
+    /** "<amount> <currency>" of the order, as sent when creating its intent. */
+    public static function order_total_key(WC_Order $order): string
+    {
+        return self::format_amount($order) . ' ' . strtolower($order->get_currency());
     }
 
     /**
