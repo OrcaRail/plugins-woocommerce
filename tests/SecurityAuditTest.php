@@ -143,5 +143,45 @@ namespace OrcaRail\WooCommerce\Tests {
                 'woocommerce_order_key' => 'wc_order_abc',
             ], $order));
         }
+
+        // WOO-2: bin/build-zip.sh copied the whole folder minus a blocklist, so local files such as
+        // .env.wordpress.generated (API key and secret) went into the release zip.
+        public function testWoo2ReleaseZipContainsNoLocalSecretsOrDevFiles(): void
+        {
+            $root = sys_get_temp_dir() . '/orcarail-zip-' . bin2hex(random_bytes(4));
+            mkdir($root . '/bin', 0777, true);
+            mkdir($root . '/includes');
+            mkdir($root . '/.real-flow-logs');
+            mkdir($root . '/e2e');
+            mkdir($root . '/stub-bin');
+            copy(dirname(__DIR__) . '/bin/build-zip.sh', $root . '/bin/build-zip.sh');
+            file_put_contents($root . '/orcarail-woocommerce.php', "<?php\n/*\n * Version: 9.9.9\n */\n");
+            file_put_contents($root . '/includes/class-x.php', "<?php\n");
+            file_put_contents($root . '/.env.wordpress.generated', "ORCARAIL_API_SECRET=fake-secret\n");
+            file_put_contents($root . '/.env.example', "ORCARAIL_API_KEY=\n");
+            file_put_contents($root . '/.real-flow-logs/run.log', "log\n");
+            file_put_contents($root . '/e2e/spec.ts', "test\n");
+            file_put_contents($root . '/docker-compose.yml', "services: {}\n");
+            file_put_contents($root . '/stub-bin/composer', "#!/bin/sh\nexit 0\n");
+            chmod($root . '/stub-bin/composer', 0755);
+
+            exec(
+                'PATH=' . escapeshellarg($root . '/stub-bin') . ':"$PATH" bash '
+                    . escapeshellarg($root . '/bin/build-zip.sh') . ' 2>&1',
+                $output,
+                $exit,
+            );
+            self::assertSame(0, $exit, implode("\n", $output));
+            exec('unzip -Z1 ' . escapeshellarg($root . '/dist/orcarail-woocommerce-9.9.9.zip'), $files);
+
+            $leaked = array_values(array_filter(
+                $files,
+                static fn (string $f) => (bool) preg_match('#/(\.env[^/]*|\.real-flow-logs/.*|e2e/.*|docker-compose\.yml)$#', $f),
+            ));
+            exec('rm -rf ' . escapeshellarg($root));
+
+            self::assertSame([], $leaked);
+            self::assertContains('orcarail-woocommerce/includes/class-x.php', $files);
+        }
     }
 }
