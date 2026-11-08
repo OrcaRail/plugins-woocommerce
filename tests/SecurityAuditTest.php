@@ -13,6 +13,20 @@ namespace {
             public string $title = '';
             public string $description = '';
             public string $enabled = 'no';
+            // Declared by WooCommerce's WC_Payment_Gateway / WC_Settings_API; without them PHP 8.2+
+            // reports the gateway constructor's assignments as deprecated dynamic properties.
+            /** @var string */
+            public $method_title = '';
+            /** @var string */
+            public $method_description = '';
+            /** @var bool */
+            public $has_fields = false;
+            /** @var list<string> */
+            public $supports = ['products'];
+            /** @var string */
+            public $icon = '';
+            /** @var array<string, mixed> */
+            public $form_fields = [];
 
             public function init_form_fields(): void
             {
