@@ -94,13 +94,6 @@ final class WC_OrcaRail_Webhook_Handler
             exit;
         }
 
-        $object_status = WC_OrcaRail_API::object_string(
-            is_object($object) || is_array($object) ? $object : null,
-            'status'
-        );
-        if (is_string($object_status) && $object_status !== '') {
-            $status = strtolower($object_status);
-        }
 
         $order = self::resolve_order($object, $intent_id);
         if (!$order instanceof WC_Order) {
@@ -131,7 +124,9 @@ final class WC_OrcaRail_Webhook_Handler
             exit;
         }
 
-        WC_OrcaRail_Order_Handler::reconcile($order, $intent_id, $status, $gateway->is_logging_enabled());
+        // Apply the intent as the API reports it, not the status in the payload: the order total and
+        // currency are checked against the authoritative intent.
+        $gateway->settle_order($order, $intent_id);
 
         status_header(200);
         echo wp_json_encode(['received' => true]);
@@ -184,7 +179,8 @@ final class WC_OrcaRail_Webhook_Handler
         if ($order_id !== null && (string) $order->get_id() !== $order_id) {
             return false;
         }
-        if ($order_key !== null && !hash_equals($order->get_order_key(), $order_key)) {
+        // The plugin always sends the order key; without it an event could claim any order id.
+        if ($order_key === null || !hash_equals($order->get_order_key(), $order_key)) {
             return false;
         }
 

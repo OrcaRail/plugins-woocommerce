@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, orcarail, cryptocurrency
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 8.1
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -63,6 +63,10 @@ Enable **Test mode** with the keys of your OrcaRail sandbox organization (`ak_te
 Not in 1.0. The merchant configures one token ID and one network ID in gateway settings.
 
 == Changelog ==
+
+= 1.3.0 =
+* Security: an order is completed only when the paid OrcaRail Payment Intent has the order's amount and currency; otherwise the order goes on hold. Webhooks are confirmed by reading the intent from the API and must carry the order key, and a pay link is reused only for the order total it was created for.
+* Security: the release zip is built from an explicit list of runtime files, so local environment files, logs and test setup can no longer be packaged.
 
 = 1.2.1 =
 * Fix: complete the OrcaRail Payment Intent on return and from an hourly sweep of pending and on-hold orders. Without it, paid orders stayed on-hold and their payments were never final or withdrawable.

@@ -224,7 +224,14 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
 
         $existing_url = (string) $order->get_meta(WC_OrcaRail_API::META_PAY_URL, true);
         $existing_intent = (string) $order->get_meta(WC_OrcaRail_API::META_INTENT_ID, true);
-        if ($existing_url !== '' && $existing_intent !== '' && !$order->is_paid()) {
+        // Reuse the pay URL only if its intent was created for the current total and currency.
+        $existing_total = (string) $order->get_meta(WC_OrcaRail_API::META_INTENT_TOTAL, true);
+        if (
+            $existing_url !== ''
+            && $existing_intent !== ''
+            && !$order->is_paid()
+            && $existing_total === WC_OrcaRail_API::order_total_key($order)
+        ) {
             WC_OrcaRail_Logger::debug(
                 sprintf('Reusing intent %s for order %d', $existing_intent, $order->get_id()),
                 $this->logging
@@ -280,6 +287,7 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
 
             $order->update_meta_data(WC_OrcaRail_API::META_INTENT_ID, $intent_id);
             $order->update_meta_data(WC_OrcaRail_API::META_PAY_URL, $pay_url);
+            $order->update_meta_data(WC_OrcaRail_API::META_INTENT_TOTAL, WC_OrcaRail_API::order_total_key($order));
             $order->update_meta_data(WC_OrcaRail_API::META_CLIENT_SECRET, $client_secret);
             $status = WC_OrcaRail_API::object_string($confirmed, 'status') ?? 'requires_payment_method';
             $order->update_meta_data(WC_OrcaRail_API::META_STATUS, $status);
@@ -463,7 +471,8 @@ final class WC_Gateway_OrcaRail extends WC_Payment_Gateway
         }
     }
 
-    private function settle_order(WC_Order $order, string $intent_id, bool $only_paid = false): void
+    /** Read the intent from the API and apply it to the order (return, cancel, sweep and webhooks). */
+    public function settle_order(WC_Order $order, string $intent_id, bool $only_paid = false): void
     {
         $intents = WC_OrcaRail_API::client($this->get_api_settings())->paymentIntents;
         WC_OrcaRail_Order_Handler::settle(
